@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telemetría RC Studio - ETHOS</title>
+    
+    <!-- PWA Metadata -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Telemetría RC">
+
+    <!-- Librería Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #121212; 
+            color: #fff; 
+            margin: 0; 
+            padding: 20px; 
+            position: relative;
+            min-height: 100vh;
+        }
+
+        .author-tag {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 13px;
+            color: #888;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        h2 { text-align: center; color: #3498db; margin-top: 0; margin-bottom: 20px; font-size: 24px; }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+            max-width: 1700px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .author-tag { position: static; text-align: center; margin-bottom: 5px; }
+        }
+
+        .card { 
+            background: #1e1e1e; 
+            padding: 18px; 
+            border-radius: 14px; 
+            border: 1px solid #2a2a2a; 
+            margin-bottom: 20px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #3498db;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            background: #181818;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            background: #252525;
+            border-color: #2ecc71;
+        }
+
+        .kpi-container { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); 
+            gap: 12px; 
+            text-align: center; 
+        }
+        .kpi-card {
+            background: #181818;
+            padding: 12px 8px;
+            border-radius: 10px;
+            border: 1px solid #282828;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .kpi-title { 
+            font-size: 11px; 
+            color: #3498db; 
+            text-transform: uppercase; 
+            font-weight: 600; 
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .kpi-title:hover { color: #2ecc71; text-decoration: underline; }
+        .kpi-value { font-size: 20px; font-weight: bold; color: #2ecc71; margin-top: 6px; }
+        
+        .kpi-select {
+            background: #2a2a2a;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-top: 6px;
+            padding: 2px;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        #plot { width: 100%; height: 580px; border-radius: 10px; background: #181818; }
+
+        .sensor-list { 
+            display: grid; 
+            grid-template-columns: 1fr; 
+            gap: 8px; 
+            max-height: 240px; 
+            overflow-y: auto; 
+            margin-top: 10px; 
+            padding-right: 5px; 
+        }
+        label.sensor-item { 
+            font-size: 13px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            background: #2a2a2a; 
+            padding: 8px 12px; 
+            border-radius: 8px; 
+            cursor: pointer;
+            border-left: 4px solid transparent;
+        }
+        label.sensor-item.virtual-lipo {
+            background: #1c352d;
+            border: 1px solid #2ecc71;
+            font-weight: bold;
+            color: #2ecc71;
+        }
+        label.sensor-item:hover { background: #333; }
+
+        .slider-container {
+            margin-top: 10px;
+            background: #2a2a2a;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .slider-container label {
+            background: transparent;
+            padding: 0;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            color: #3498db;
+            display: flex;
+            justify-content: space-between;
+        }
+        .slider-container input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .btn { 
+            display: block; 
+            width: 100%; 
+            padding: 12px; 
+            color: white; 
+            text-align: center; 
+            font-weight: bold; 
+            border-radius: 10px; 
+            border: none; 
+            font-size: 14px; 
+            cursor: pointer; 
+            transition: background 0.2s;
+        }
+        .btn-green { background: #27ae60; }
+        .btn-green:hover { background: #2ecc71; }
+        .btn-blue { background: #2980b9; }
+        .btn-blue:hover { background: #3498db; }
+        .btn-purple { background: #8e44ad; }
+        .btn-purple:hover { background: #9b59b6; }
+
+        #status { font-size: 13px; color: #e74c3c; margin-top: 10px; text-align: center; }
+
+        @media print {
+            body { background-color: #fff; color: #000; padding: 0; }
+            .sidebar, .btn-group, .author-tag { display: none !important; }
+            .dashboard { display: block; }
+            .card { border: 1px solid #ccc; background: #fff; color: #000; margin-bottom: 15px; }
+            .kpi-card { background: #f5f5f5; border: 1px solid #ddd; }
+            .kpi-value { color: #27ae60; }
+            #plot { height: 450px !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="author-tag">por Daniel Gatti</div>
+    <h2>🛩️ Telemetría RC Studio (ETHOS)</h2>
+
+    <div class="dashboard">
+        
+        <!-- Panel Izquierdo -->
+        <div class="sidebar">
+            <div class="card">
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('csvFile').click()">
+                    <b>📂 Arrastra tu CSV aquí</b><br>
+                    <span style="font-size: 12px; color: #aaa;">o haz clic para seleccionar</span>
+                    <input type="file" id="csvFile" accept=".csv, .txt" style="display:none" onchange="cargarCSV(this.files[0])">
+                </div>
+                <div id="status"></div>
+            </div>
+
+            <div class="card">
+                <b>📊 Sensores Visibles:</b>
+                <div class="sensor-list" id="sensorList">
+                    <span style="font-size: 12px; color: #666;">Selecciona un archivo CSV para cargar sensores...</span>
+                </div>
+
+                <!-- Filtro de Suavizado ampliado a 30 -->
+                <div class="slider-container">
+                    <label>
+                        <span>🧹 Suavizado (Filtro Ruido):</span>
+                        <span id="smoothVal">Off</span>
+                    </label>
+                    <input type="range" id="smoothRange" min="0" max="30" value="0" oninput="actualizarSuavizado(this.value)">
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-green" onclick="descargarKML()">🌎 Exportar KML (Google Earth)</button>
+                <button class="btn btn-blue" onclick="descargarGraficaPNG()">📸 Exportar Gráfica (PNG)</button>
+                <button class="btn btn-purple" onclick="imprimirReportePDF()">📄 Imprimir / Reporte PDF</button>
+            </div>
+        </div>
+
+        <!-- Panel Derecho -->
+        <div class="main-panel">
+            <!-- Tarjetas KPI Personalizables -->
+            <div class="card kpi-container" id="kpiContainer">
+                <!-- Se generan dinámicamente y se memorizan por localStorage -->
+            </div>
+
+            <!-- Gráfica de Telemetría -->
+            <div class="card">
+                <div id="plot"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let datosCSV = [];
+        let cabeceras = [];
+        let ejeSegundosRelativos = [];
+        let ejeTiempoEtiquetas = [];
+        let kmlGenerado = "";
+        let ventanaSuavizado = 0;
+        let sensorVirtualLiPoNombre = null;
+        let nombreArchivoOriginal = "Vuelo_ETHOS";
+        let metricasCalculadas = {};
+
+        // Configuración predeterminada de las 7 tarjetas KPI
+        let kpiConfigDefault = [
+            { id: 'kpi_time', label: '⏱ Duración', type: 'duracion' },
+            { id: 'kpi_alt', label: '🏔️ Alt. Máx', type: 'max_alt' },
+            { id: 'kpi_vel', label: '🚀 Vel. Pico', type: 'max_vel' },
+            { id: 'kpi_bat', label: '🔋 Bat. Mín', type: 'min_bat' },
+            { id: 'kpi_cons', label: '⚡ Consumo', type: 'max_cons' },
+            { id: 'kpi_dist', label: '📏 Dist. Total', type: 'dist_total' },
+            { id: 'kpi_maxdist', label: '📍 Dist. Máx (Home)', type: 'dist_max' }
+        ];
+
+        let kpiConfigActual = cargarConfigKpi();
+
+        function cargarConfigKpi() {
+            try {
+                const guardado = localStorage.getItem('rc_studio_kpi_config');
+                if (guardado) return JSON.parse(guardado);
+            } catch(e) {}
+            return kpiConfigDefault;
+        }
+
+        function guardarConfigKpi() {
+            try {
+                localStorage.setItem('rc_studio_kpi_config', JSON.stringify(kpiConfigActual));
+            } catch(e) {}
+        }
+
+        const PALETA_COLORES = [
+            '#3498db', '#2ecc71', '#e74c3c', '#9b59b6', '#f1c40f', 
+            '#e67e22', '#1abc9c', '#e84393', '#00cec9', '#fdcb6e',
+            '#6c5ce7', '#d63031', '#00b894', '#a29bfe', '#fd79a8'
+        ];
+
+        // Drag & Drop
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); }, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); }, false);
+        });
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) cargarCSV(files[0]);
+        });
+
+        function cargarCSV(file) {
+            const status = document.getElementById('status');
+            status.style.color = "#3498db";
+            status.innerText = "Leyendo archivo ETHOS...";
+
+            if (!file) return;
+
+            nombreArchivoOriginal = file.name.replace(/\.[^/.]+$/, "");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    procesarDatos(e.target.result);
+                    status.style.color = "#2ecc71";
+                    status.innerText = "¡CSV cargado! (" + datosCSV.length + " lecturas válidas)";
+                } catch(err) {
+                    status.style.color = "#e74c3c";
+                    status.innerText = "Error: " + err.message;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseTimeInSeconds(timeStr) {
+            if (!timeStr) return null;
+            timeStr = String(timeStr).trim();
+            if (!isNaN(parseFloat(timeStr)) && !timeStr.includes(':')) {
+                return parseFloat(timeStr);
+            }
+            const parts = timeStr.split(':').map(p => parseFloat(p));
+            if (parts.length === 3) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            } else if (parts.length === 2) {
+                return parts[0] * 60 + parts[1];
+            }
+            return null;
+        }
+
+        function formatSecondsToMMSS(totalSeconds) {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = Math.floor(totalSeconds % 60);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function formatSecondsToExact(totalSeconds) {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = Math.floor(totalSeconds % 60);
+            const ms = Math.round((totalSeconds % 1) * 10);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${ms}`;
+        }
+
+        function parseEthosCoord(valStr) {
+            if (!valStr) return null;
+            valStr = String(valStr).trim().replace(/['"°]/g, ' ');
+            let directNum = parseFloat(valStr);
+            if (!isNaN(directNum) && Math.abs(directNum) > 0 && !valStr.match(/[NSEW]/i)) {
+                return directNum;
+            }
+            let match = valStr.match(/([0-9]+)[\s]+([0-9\.]+)[\s]*([NSEW])/i);
+            if (match) {
+                let deg = parseFloat(match[1]);
+                let min = parseFloat(match[2]);
+                let dir = match[3].toUpperCase();
+                let val = deg + (min / 60);
+                if (dir === 'S' || dir === 'W') val = -val;
+                return val;
+            }
+            return null;
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function aplicarMovingAverage(arr, windowSize) {
+            if (windowSize <= 1) return arr;
+            let result = [];
+            for (let i = 0; i < arr.length; i++) {
+                if (arr[i] === null || isNaN(arr[i])) {
+                    result.push(null);
+                    continue;
+                }
+                let sum = 0;
+                let count = 0;
+                let start = Math.max(0, i - windowSize + 1);
+                for (let j = start; j <= i; j++) {
+                    if (arr[j] !== null && !isNaN(arr[j])) {
+                        sum += arr[j];
+                        count++;
+                    }
+                }
+                result.push(count > 0 ? (sum / count) : null);
+            }
+            return result;
+        }
+
+        function actualizarSuavizado(val) {
+            ventanaSuavizado = parseInt(val);
+            document.getElementById('smoothVal').innerText = ventanaSuavizado === 0 ? "Off" : `${ventanaSuavizado} pts`;
+            dibujarGrafica();
+        }
+
+        function procesarDatos(text) {
+            const lineas = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+            if (lineas.length < 2) throw new Error("Archivo vacío.");
+
+            const sep = lineas[0].includes(';') ? ';' : ',';
+            cabeceras = lineas[0].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+
+            datosCSV = [];
+            ejeSegundosRelativos = [];
+            ejeTiempoEtiquetas = [];
+            sensorVirtualLiPoNombre = null;
+
+            let candidateCellCols = [];
+            cabeceras.forEach(c => {
+                const cLower = c.toLowerCase();
+                if ((cLower.includes('lipo') || cLower.includes('cell') || cLower.includes('cel') || cLower.match(/^c[0-9]+/)) &&
+                    !cLower.includes('cels') && !cLower.includes('total')) {
+                    candidateCellCols.push(c);
+                }
+            });
+
+            let activeLipoCols = [];
+            if (candidateCellCols.length > 0) {
+                let sampleRows = lineas.slice(1, Math.min(lineas.length, 50));
+                candidateCellCols.forEach(col => {
+                    let colIdx = cabeceras.indexOf(col);
+                    let hasRealData = sampleRows.some(rowStr => {
+                        let parts = rowStr.split(sep);
+                        let val = parseFloat(parts[colIdx]);
+                        return !isNaN(val) && val > 0.5;
+                    });
+                    if (hasRealData) {
+                        activeLipoCols.push(col);
+                    }
+                });
+            }
+
+            if (activeLipoCols.length > 0) {
+                sensorVirtualLiPoNombre = `🔋 Voltaje Total LiPo (${activeLipoCols.length}S)`;
+            } else {
+                const celsCol = cabeceras.find(c => ['cels', 'vfas', 'lipo'].includes(c.toLowerCase()));
+                if (celsCol) {
+                    sensorVirtualLiPoNombre = `🔋 Voltaje Total LiPo (${celsCol})`;
+                }
+            }
+
+            let alts = [], vels = [], bats = [], mahs = [], lats = [], lons = [];
+
+            const idxTime = cabeceras.findIndex(c => ['time', 'tiempo', 'clock', 'reloj'].some(t => c.toLowerCase().includes(t)));
+            const idxAlt = cabeceras.findIndex(c => c.toLowerCase().includes('alt') || c.toLowerCase().includes('galt'));
+            const idxVel = cabeceras.findIndex(c => c.toLowerCase().includes('vel') || c.toLowerCase().includes('gspd') || c.toLowerCase().includes('speed'));
+            const idxBat = cabeceras.findIndex(c => ['bat','rxbt','volt','vfas','cell'].some(t => c.toLowerCase().includes(t)));
+            const idxMah = cabeceras.findIndex(c => c.toLowerCase().includes('mah') || c.toLowerCase().includes('curr') || c.toLowerCase().includes('cap'));
+            
+            const idxLat = cabeceras.findIndex(c => c.toLowerCase().includes('lat') || c.toLowerCase().includes('gps(n') || c.toLowerCase().includes('gps(s'));
+            const idxLon = cabeceras.findIndex(c => c.toLowerCase().includes('lon') || c.toLowerCase().includes('lng') || c.toLowerCase().includes('gps(e') || c.toLowerCase().includes('gps(w'));
+            const idxGps = cabeceras.findIndex(c => c.toLowerCase() === 'gps' || c.toLowerCase().includes('gps_coord') || c.toLowerCase().includes('gps_latitud'));
+
+            let t0 = null;
+            let filasCrudas = [];
+
+            for (let i = 1; i < lineas.length; i++) {
+                const partes = lineas[i].split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
+                if (partes.length < cabeceras.length) continue;
+
+                let row = {};
+                cabeceras.forEach((col, idx) => {
+                    let valStr = partes[idx];
+                    const num = parseFloat(valStr.replace(',', '.'));
+                    row[col] = !isNaN(num) ? num : valStr;
+                });
+
+                let lat = null, lon = null;
+                if (idxLat !== -1 && idxLon !== -1 && cabeceras[idxLat] in row && cabeceras[idxLon] in row) {
+                    lat = parseFloat(String(row[cabeceras[idxLat]]).replace(',', '.'));
+                    lon = parseFloat(String(row[cabeceras[idxLon]]).replace(',', '.'));
+                } else if (idxGps !== -1) {
+                    const gpsRaw = partes[idxGps];
+                    const coords = gpsRaw.replace(',', '.').split(/[,;\s]+/);
+                    if (coords.length >= 2) {
+                        lat = parseEthosCoord(coords[0]);
+                        lon = parseEthosCoord(coords[1]);
+                    }
+                }
+
+                if (lat === null || lon === null || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+                    continue;
+                }
+
+                row['__lat_limpia'] = lat;
+                row['__lon_limpia'] = lon;
+
+                if (sensorVirtualLiPoNombre) {
+                    if (activeLipoCols.length > 0) {
+                        let totalV = 0;
+                        let validCount = 0;
+                        activeLipoCols.forEach(col => {
+                            let v = parseFloat(row[col]);
+                            if (!isNaN(v) && v > 0.5) {
+                                totalV += v;
+                                validCount++;
+                            }
+                        });
+                        row[sensorVirtualLiPoNombre] = validCount > 0 ? parseFloat(totalV.toFixed(2)) : null;
+                    } else {
+                        const celsCol = cabeceras.find(c => ['cels', 'vfas', 'lipo'].includes(c.toLowerCase()));
+                        let v = parseFloat(row[celsCol]);
+                        row[sensorVirtualLiPoNombre] = (!isNaN(v) && v > 0) ? v : null;
+                    }
+                }
+
+                filasCrudas.push({ row, lat, lon, partes, i });
+            }
+
+            let filasFiltradas = [];
+            let lastLat = null, lastLon = null;
+            filasCrudas.forEach(item => {
+                if (item.lat !== lastLat || item.lon !== lastLon) {
+                    filasFiltradas.push(item);
+                    lastLat = item.lat;
+                    lastLon = item.lon;
+                }
+            });
+
+            filasFiltradas.forEach((item, index) => {
+                let row = item.row;
+                let partes = item.partes;
+                let i = item.i;
+
+                datosCSV.push(row);
+
+                let tSec = idxTime !== -1 ? parseTimeInSeconds(partes[idxTime]) : index * 0.1;
+                let elapsed = 0;
+                if (tSec !== null) {
+                    if (t0 === null) t0 = tSec;
+                    elapsed = tSec - t0;
+                    if (elapsed < 0) elapsed += 86400;
+                } else {
+                    elapsed = index * 0.1;
+                }
+
+                ejeSegundosRelativos.push(elapsed);
+                ejeTiempoEtiquetas.push(formatSecondsToExact(elapsed));
+
+                if (idxAlt !== -1 && !isNaN(parseFloat(row[cabeceras[idxAlt]]))) alts.push(parseFloat(row[cabeceras[idxAlt]]));
+                if (idxVel !== -1 && !isNaN(parseFloat(row[cabeceras[idxVel]]))) vels.push(parseFloat(row[cabeceras[idxVel]]));
+                if (idxBat !== -1 && !isNaN(parseFloat(row[cabeceras[idxBat]])) && parseFloat(row[cabeceras[idxBat]]) > 0) bats.push(parseFloat(row[cabeceras[idxBat]]));
+                if (idxMah !== -1 && !isNaN(parseFloat(row[cabeceras[idxMah]]))) mahs.push(parseFloat(row[cabeceras[idxMah]]));
+
+                lats.push(item.lat);
+                lons.push(item.lon);
+            });
+
+            if (sensorVirtualLiPoNombre && bats.length === 0) {
+                datosCSV.forEach(d => {
+                    if (d[sensorVirtualLiPoNombre] && d[sensorVirtualLiPoNombre] > 0) bats.push(d[sensorVirtualLiPoNombre]);
+                });
+            }
+
+            let distTotal = 0;
+            let distMaxHome = 0;
+            if (lats.length >= 2) {
+                const homeLat = lats[0];
+                const homeLon = lons[0];
+                for (let k = 0; k < lats.length - 1; k++) {
+                    distTotal += haversineDistance(lats[k], lons[k], lats[k+1], lons[k+1]);
+                    const dHome = haversineDistance(homeLat, homeLon, lats[k+1], lons[k+1]);
+                    if (dHome > distMaxHome) distMaxHome = dHome;
+                }
+            }
+
+            const duracionSegs = ejeSegundosRelativos.length ? Math.max(...ejeSegundosRelativos) : 0;
+
+            // Recopilar todas las métricas disponibles (duración, distancias y valores de todos los sensores)
+            metricasCalculadas = {
+                'duracion': { label: '⏱ Duración', value: formatSecondsToMMSS(duracionSegs) },
+                'dist_total': { label: '📏 Dist. Total', value: distTotal > 0 ? (distTotal > 1000 ? (distTotal/1000).toFixed(2) + " km" : distTotal.toFixed(0) + " m") : "N/A" },
+                'dist_max': { label: '📍 Dist. Máx (Home)', value: distMaxHome > 0 ? (distMaxHome > 1000 ? (distMaxHome/1000).toFixed(2) + " km" : distMaxHome.toFixed(0) + " m") : "N/A" }
+            };
+
+            let sensoresDisponibles = cabeceras.filter(c => !['date','time','tiempo','gps','datetime','clock','__lat_limpia','__lon_limpia'].includes(c.toLowerCase()));
+            if (sensorVirtualLiPoNombre) {
+                sensoresDisponibles = [sensorVirtualLiPoNombre, ...sensoresDisponibles];
+            }
+
+            sensoresDisponibles.forEach(sensor => {
+                let valores = datosCSV.map(d => typeof d[sensor] === 'number' ? d[sensor] : null).filter(v => v !== null && !isNaN(v));
+                if (valores.length > 0) {
+                    let maxVal = Math.max(...valores);
+                    let minVal = Math.min(...valores);
+                    let avgVal = valores.reduce((a, b) => a + b, 0) / valores.length;
+
+                    metricasCalculadas[`max_${sensor}`] = { label: `🏔️ Máx: ${sensor}`, value: maxVal.toFixed(2) };
+                    metricasCalculadas[`min_${sensor}`] = { label: `🔻 Mín: ${sensor}`, value: minVal.toFixed(2) };
+                    metricasCalculadas[`avg_${sensor}`] = { label: `📊 Prom: ${sensor}`, value: avgVal.toFixed(2) };
+                }
+            });
+
+            // Compatibilidad con las métricas por defecto clásicas si no existen en formato dinámico
+            if (!metricasCalculadas['max_alt'] && alts.length) metricasCalculadas['max_alt'] = { label: '🏔️ Alt. Máx', value: Math.max(...alts).toFixed(1) + " m" };
+            if (!metricasCalculadas['max_vel'] && vels.length) metricasCalculadas['max_vel'] = { label: '🚀 Vel. Pico', value: Math.max(...vels).toFixed(1) + " km/h" };
+            if (!metricasCalculadas['min_bat'] && bats.length) metricasCalculadas['min_bat'] = { label: '🔋 Bat. Mín', value: Math.min(...bats).toFixed(2) + " V" };
+            if (!metricasCalculadas['max_cons'] && mahs.length) metricasCalculadas['max_cons'] = { label: '⚡ Consumo', value: Math.max(...mahs).toFixed(0) + " mAh" };
+
+            actualizarVistaKPIs();
+
+            const listDiv = document.getElementById('sensorList');
+            listDiv.innerHTML = sensoresDisponibles.map((s, idx) => {
+                const color = PALETA_COLORES[idx % PALETA_COLORES.length];
+                const isVirtual = s === sensorVirtualLiPoNombre;
+                return `<label class="sensor-item ${isVirtual ? 'virtual-lipo' : ''}" style="border-left-color: ${color};">
+                    <input type="checkbox" value="${s}" ${idx < 2 ? 'checked' : ''} onchange="dibujarGrafica()"> ${s}
+                </label>`;
+            }).join('');
+
+            generarKML(lats, lons, alts, vels);
+            dibujarGrafica();
+        }
+
+        function actualizarVistaKPIs() {
+            const container = document.getElementById('kpiContainer');
+            
+            // Generar opciones para el selector desplegable basadas en las métricas calculadas
+            let opcionesHTML = '';
+            for (let key in metricasCalculadas) {
+                opcionesHTML += `<option value="${key}">${metricasCalculadas[key].label}</option>`;
+            }
+
+            container.innerHTML = kpiConfigActual.map((kpi, index) => {
+                let metricaActual = metricasCalculadas[kpi.type] || { label: kpi.label, value: 'N/A' };
+                return `
+                    <div class="kpi-card" id="kpi-card-${index}">
+                        <div class="kpi-title" title="Haz clic para cambiar indicador" onclick="toggleKpiSelect(${index})">${metricaActual.label}</div>
+                        <div class="kpi-value">${metricaActual.value}</div>
+                        <div id="kpi-select-box-${index}" style="display: none;">
+                            <select class="kpi-select" onchange="cambiarMetricaKpi(${index}, this.value)">
+                                <option value="">-- Seleccionar --</option>
+                                ${opcionesHTML}
+                            </select>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleKpiSelect(index) {
+            const box = document.getElementById(`kpi-select-box-${index}`);
+            box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function cambiarMetricaKpi(index, nuevaClave) {
+            if (!nuevaClave || !metricasCalculadas[nuevaClave]) return;
+            kpiConfigActual[index] = {
+                id: `kpi_custom_${index}`,
+                label: metricasCalculadas[nuevaClave].label,
+                type: nuevaClave
+            };
+            guardarConfigKpi();
+            actualizarVistaKPIs();
+        }
+
+        function dibujarGrafica() {
+            if (typeof Plotly === 'undefined') return;
+
+            const checkedNodes = Array.from(document.querySelectorAll('#sensorList input:checked'));
+            const checkedSensors = checkedNodes.map(cb => cb.value);
+
+            if (checkedSensors.length === 0) {
+                Plotly.newPlot('plot', [], { paper_bgcolor: '#1e1e1e', plot_bgcolor: '#181818' });
+                return;
+            }
+
+            let traces = [];
+            let layout = {
+                paper_bgcolor: '#1e1e1e',
+                plot_bgcolor: '#181818',
+                font: { color: '#fff', size: 12 },
+                margin: { l: 60, r: 60, t: 20, b: 50 },
+                xaxis: { 
+                    title: 'Tiempo de Vuelo (MM:SS)', 
+                    gridcolor: '#2a2a2a',
+                    zerolinecolor: '#3498db',
+                    tickmode: 'array',
+                    tickvals: [],
+                    ticktext: []
+                },
+                legend: { orientation: 'h', y: -0.25 }
+            };
+
+            const maxSegs = ejeSegundosRelativos.length ? Math.max(...ejeSegundosRelativos) : 0;
+            for (let s = 0; s <= maxSegs; s += 30) {
+                layout.xaxis.tickvals.push(s);
+                layout.xaxis.ticktext.push(formatSecondsToMMSS(s));
+            }
+
+            let leftCount = 0;
+            let rightCount = 0;
+
+            checkedSensors.forEach((sensor, index) => {
+                const color = PALETA_COLORES[index % PALETA_COLORES.length];
+                let yRaw = datosCSV.map(d => typeof d[sensor] === 'number' ? d[sensor] : null);
+                let yFiltered = aplicarMovingAverage(yRaw, ventanaSuavizado);
+
+                let yAxisName = index === 0 ? 'yaxis' : `yaxis${index + 1}`;
+                let axisRef = index === 0 ? 'y' : `y${index + 1}`;
+
+                traces.push({
+                    x: ejeSegundosRelativos,
+                    y: yFiltered,
+                    text: ejeTiempoEtiquetas,
+                    hovertemplate: `<b>${sensor}</b>: %{y:.2f}<br><b>Tiempo</b>: %{text}<extra></extra>`,
+                    mode: 'lines',
+                    name: sensor,
+                    line: { color: color, width: 2 },
+                    yaxis: axisRef
+                });
+
+                let side = (index % 2 === 0) ? 'left' : 'right';
+
+                if (side === 'left') {
+                    leftCount++;
+                } else {
+                    rightCount++;
+                }
+
+                layout[yAxisName] = {
+                    title: { text: sensor, font: { color: color } },
+                    tickfont: { color: color },
+                    gridcolor: index === 0 ? '#2a2a2a' : 'transparent',
+                    showgrid: index === 0,
+                    zeroline: false,
+                    anchor: 'free',
+                    side: side,
+                    overlaying: index === 0 ? undefined : 'y',
+                    position: side === 'left' ? 0.0 : 1.0
+                };
+            });
+
+            let currentLeftIndex = 0;
+            let currentRightIndex = 0;
+
+            checkedSensors.forEach((sensor, index) => {
+                let yAxisName = index === 0 ? 'yaxis' : `yaxis${index + 1}`;
+                let side = (index % 2 === 0) ? 'left' : 'right';
+
+                if (side === 'left') {
+                    let offset = (leftCount - 1 - currentLeftIndex) * 0.08;
+                    layout[yAxisName].position = Math.max(0, offset);
+                    currentLeftIndex++;
+                } else {
+                    let offset = currentRightIndex * 0.08;
+                    layout[yAxisName].position = Math.min(1, 1 - (rightCount - 1 - currentRightIndex) * 0.08);
+                    currentRightIndex++;
+                }
+            });
+
+            let leftSpaceNeeded = leftCount * 0.08;
+            let rightSpaceNeeded = rightCount * 0.08;
+
+            layout.xaxis.domain = [
+                leftSpaceNeeded, 
+                1 - rightSpaceNeeded
+            ];
+
+            layout.margin.l = 30 + (leftCount * 50);
+            layout.margin.r = 30 + (rightCount * 50);
+
+            Plotly.newPlot('plot', traces, layout, {responsive: true});
+        }
+
+        function generarKML(lats, lons, alts, vels) {
+            if (lats.length < 2) { 
+                kmlGenerado = ""; 
+                return; 
+            }
+            const minAlt = alts.length ? Math.min(...alts) : 0;
+            const minVel = vels.length ? Math.min(...vels) : 0;
+            const maxVel = vels.length ? Math.max(...vels) : 1;
+            const rangoVel = (maxVel - minVel) || 1;
+
+            let segs = [];
+            for (let i = 0; i < lats.length - 1; i++) {
+                const alt1 = Math.max(0, (alts[i] || 0) - minAlt);
+                const alt2 = Math.max(0, (alts[i+1] || 0) - minAlt);
+                const factor = ((vels[i] || 0) - minVel) / rangoVel;
+                const r = Math.floor(255 * factor), g = Math.floor(255 * (1 - factor));
+                const hex = `ff00${g.toString(16).padStart(2,'0')}${r.toString(16).padStart(2,'0')}`;
+
+                segs.push(`<Placemark><Style><LineStyle><color>${hex}</color><width>5</width></LineStyle></Style><LineString><altitudeMode>relativeToGround</altitudeMode><coordinates>${lons[i]},${lats[i]},${alt1.toFixed(1)} ${lons[i+1]},${lats[i+1]},${alt2.toFixed(1)}</coordinates></LineString></Placemark>`);
+            }
+
+            kmlGenerado = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Vuelo ETHOS 3D</name><Folder>${segs.join('')}</Folder></Document></kml>`;
+        }
+
+        function descargarKML() {
+            if (!kmlGenerado) {
+                alert("⚠ No se encontraron datos GPS válidos en el CSV.");
+                return;
+            }
+
+            const blob = new Blob([kmlGenerado], { type: 'application/vnd.google-earth.kml+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            // El KML lleva el nombre original del archivo CSV con "vuelo 3D" al final
+            a.download = `${nombreArchivoOriginal}_vuelo 3D.kml`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function descargarGraficaPNG() {
+            if (typeof Plotly === 'undefined') return;
+            Plotly.downloadImage('plot', {
+                format: 'png',
+                width: 1400,
+                height: 700,
+                filename: 'Grafica_Telemetria_ETHOS'
+            });
+        }
+
+        function imprimirReportePDF() {
+            window.print();
+        }
+
+        // Inicializar KPIs vacíos o por defecto al arrancar
+        window.onload = function() {
+            actualizarVistaKPIs();
+        };
+    </script>
+</body>
+</html>
